@@ -24,9 +24,11 @@ const int sendPin = 12;
 
 const int batteryMonitor = A2;
 
-int modeSwitch = 0;
+int modeSwitch = 1;
+int lastModeSwitch = 1;
 int channel = 1;
 int dmxValue = 0;
+
 
 #define channelSelectPot A0
 #define ValueSelectSlider A1
@@ -56,69 +58,45 @@ void setup() {
   pinMode(powerBluePin, OUTPUT);
   
   pinMode(switchPin, INPUT);
+  
+  channelDisplay.setBrightness(5);
+  DMXValueDisplay.setBrightness(5);
+   
+  //Put into Send Mode as the default
+  DMXSerial.init(DMXController);
+  digitalWrite(readPin, HIGH);
+  digitalWrite(sendPin, HIGH);
 }
 
 void loop() {
-  channelDisplay.setBrightness(5);
-  DMXValueDisplay.setBrightness(5);
   modeSwitch = digitalRead(switchPin);
+  
+  // Change modes
+  if (modeSwitch != lastModeSwitch) {
+    if (modeSwitch == 1){
+      DMXSerial.init(DMXController);
+      //Put into Send Mode
+      digitalWrite(readPin, HIGH);
+      digitalWrite(sendPin, HIGH);
+    } elseif (modeSwitch == 0){
+      DMXSerial.init(DMXReceiver);
+      //Put into Read Mode
+      digitalWrite(readPin, LOW);
+      digitalWrite(sendPin, LOW);
+    }
+    lastModeSwitch = modeSwitch;
+  }
 
   // DMX Send Mode
   if (modeSwitch == 1){
-    DMXSerial.init(DMXController);
-    //Put into Send Mode
-    digitalWrite(readPin, HIGH);
-    digitalWrite(sendPin, HIGH);
+    sendMode();
   }
-  while (modeSwitch == 1){
-    DMXValueDisplay.clear();
-    channelDisplay.clear();
-    int channelRead = analogRead(channelSelectPot);
-    int channel = map(channelRead, 0, 1023, 0, 255);
-    int valueRead = analogRead(ValueSelectSlider);
-    int sliderValue = map(valueRead, 0, 1023, 0, 255);
-    DMXSerial.write(channel, sliderValue);
-    analogWrite(WhitePin, sliderValue);
-    DMXValueDisplay.showNumberDec(sliderValue);
-    channelDisplay.showNumberDec(channel);
-    delay(250);
-    modeSwitch = digitalRead(switchPin);
-    CheckBattery();
-  }
+  
   // DMX Read Mode
   if (modeSwitch == 0){
-    DMXSerial.init(DMXReceiver);
-    //Put into Read Mode
-    digitalWrite(readPin, LOW);
-    digitalWrite(sendPin, LOW);
+    readMode();
   }
-  while (modeSwitch == 0){
-    // Calculate how long no data bucket was received
-    unsigned long lastPacket = DMXSerial.noDataSince();
-    int channelRead = analogRead(channelSelectPot);
-    int channel = map(channelRead, 0, 1023, 0, 255);
   
-    if (lastPacket < 5000) {
-      channelDisplay.clear();
-      DMXValueDisplay.clear();
-      // read recent DMX values and set pwm levels
-      dmxValue = DMXSerial.read(channel);
-      analogWrite(signalRedPin, RedDefaultLevel);
-      analogWrite(signalGreenPin, 255);
-      analogWrite(signalBluePin, BlueDefaultLevel);
-      analogWrite(WhitePin, dmxValue);
-      channelDisplay.showNumberDec(channel);
-    }
-    else {
-      // Show pure red color, when no data was received since 5 seconds or more.
-      analogWrite(signalRedPin, 255);
-      analogWrite(signalGreenPin, GreenDefaultLevel);
-      analogWrite(signalBluePin, BlueDefaultLevel);
-    }
-    delay(250);
-    modeSwitch = digitalRead(switchPin);
-    CheckBattery();
-  }
 }
 
 void CheckBattery() {
@@ -148,4 +126,48 @@ void CheckBattery() {
       // Blink Red LED
     }
     // if charging -> make blue until charged, then make blink green
+}
+
+void sendMode() {
+    DMXValueDisplay.clear();
+    channelDisplay.clear();
+    int channelRead = analogRead(channelSelectPot);
+    int channel = map(channelRead, 0, 1023, 0, 255);
+    int valueRead = analogRead(ValueSelectSlider);
+    int sliderValue = map(valueRead, 0, 1023, 0, 255);
+    DMXSerial.write(channel, sliderValue);
+    analogWrite(WhitePin, sliderValue);
+    DMXValueDisplay.showNumberDec(sliderValue);
+    channelDisplay.showNumberDec(channel);
+    delay(250);
+    modeSwitch = digitalRead(switchPin);
+    CheckBattery();
+}
+
+void readMode() {
+    // Calculate how long no data bucket was received
+    unsigned long lastPacket = DMXSerial.noDataSince();
+    int channelRead = analogRead(channelSelectPot);
+    int channel = map(channelRead, 0, 1023, 0, 255);
+  
+    if (lastPacket < 5000) {
+      channelDisplay.clear();
+      DMXValueDisplay.clear();
+      // read recent DMX values and set pwm levels
+      dmxValue = DMXSerial.read(channel);
+      analogWrite(signalRedPin, RedDefaultLevel);
+      analogWrite(signalGreenPin, 255);
+      analogWrite(signalBluePin, BlueDefaultLevel);
+      analogWrite(WhitePin, dmxValue);
+      channelDisplay.showNumberDec(channel);
+    }
+    else {
+      // Show pure red color, when no data was received since 5 seconds or more.
+      analogWrite(signalRedPin, 255);
+      analogWrite(signalGreenPin, GreenDefaultLevel);
+      analogWrite(signalBluePin, BlueDefaultLevel);
+    }
+    delay(250);
+    modeSwitch = digitalRead(switchPin);
+    CheckBattery();
 }
